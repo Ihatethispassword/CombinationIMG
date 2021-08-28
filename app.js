@@ -11,7 +11,7 @@ const width = 500; // Установка ширины картинок
 const height = 500; // Установка высоты картинок
 // Для коректного отображения, необходимо указать точный размер картинок в пикселях
 
-const CountImage = 5; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
+const CountImage = 1; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
 const OutputFileName = "image"; // Название файла изображения полученного на выходе. К нему автоматически добавляется порядковый номер
 
 var FolderArray = [ // Тут прописываются пути к папкам с разными аксессуарами. Прорисовка проходит сверху вниз. Картининки из первой строчки рисуются первыми
@@ -63,8 +63,6 @@ const GetItem = (Array) => {
 
   var TableFind = [];
   var TableIndex = 0;
-  if (Array.length == 1) return Array[0];
-  else 
   for (let i = 0; i < Array.length; i++) {
     for (var j = 0; j < parseInt(Array[i].Rarity,10); j++) {
       var x = Array[i];
@@ -119,6 +117,7 @@ const draw = async (filename) => {
   
   SaveIMG(canvas, filename);
 
+  console.log("Изображение: " + filename + " успешно созданно!");
   Metadate = [];
   ctx.clearRect(0, 0, width, height);
 }
@@ -129,6 +128,7 @@ const MassDraw = async (Count) => {
   {
     await draw(OutputFileName + " " + i);
   }
+  console.log("Генерация успешно завершена!");
 }
 
 LoadImage();
