@@ -11,7 +11,11 @@ const width = 500; // Установка ширины картинок
 const height = 500; // Установка высоты картинок
 // Для коректного отображения, необходимо указать точный размер картинок в пикселях
 
-const CountImage = 1; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
+const mode = "BruteForce"; // Тут устанавливается режим генерации. "BruteForce" - перебор вариантов. "CountMode" - создание заданного колличества
+// В режиме перебора вариантов происходит отрисовка всех возможных комбинаций, с учетом того, что какой-либо аксессуар может отсутствовать
+// Ниже, в PermFolderArray можно указать арты из каких папок не получают возможность не появиться при генерации 
+
+const CountImage = 10; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
 const OutputFileName = "image"; // Название файла изображения полученного на выходе. К нему автоматически добавляется порядковый номер
 
 var FolderArray = [ // Тут прописываются пути к папкам с разными аксессуарами. Прорисовка проходит сверху вниз. Картининки из первой строчки рисуются первыми
@@ -24,6 +28,12 @@ var FolderArray = [ // Тут прописываются пути к папка�
   "./Weapon/",
 ]
 
+var PermFolderArray = [ // Тут прописываются пути к папкам с разными аксессуарами, которые в массовой прорисовке должны 100% присутствовать.
+  // Путь копируеться из предыдущей папки
+  "./Background/",
+  "./Body/",
+]
+
 // Конец настроек программы
 
 const fs = require("fs");
@@ -33,6 +43,7 @@ const canvas = createCanvas(width, height);
 const ctx = canvas.getContext("2d");
 var Metadate = [];
 var ImageArray = [];
+var CountArray = [];
 
 function getRandomInt(max) {
     return Math.floor(Math.random() * max);
@@ -60,9 +71,9 @@ const AddToMetaDate = (image) => {
 const GetItem = (Array) => {
 
   let RandomNumber = getRandomInt(100);
+  var TableIndex = 0;
 
   var TableFind = [];
-  var TableIndex = 0;
   for (let i = 0; i < Array.length; i++) {
     for (var j = 0; j < parseInt(Array[i].Rarity,10); j++) {
       var x = Array[i];
@@ -90,18 +101,39 @@ const SortArrayByRarity = (Array) =>{
   return buf;
 }
 
+function Shuffle(array) {
+  for (let i = array.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [array[i], array[j]] = [array[j], array[i]];
+  }
+}
+
 const SaveIMG = (bufcanvs, filename) => {
     fs.writeFileSync("./Result/" + filename + ".png", bufcanvs.toBuffer("image/png"));
     fs.writeFileSync("./Result/" + filename + "_MetaDate.json", JSON.stringify(Metadate));
 }
 
-const LoadImage = () =>{
+const LoadImage = () => {
 
-  for (let i= 0; i < FolderArray.length; i++)
-  {
+  for (let i = 0; i < FolderArray.length; i++) {
     let buf = getElements(FolderArray[i]);
     ImageArray.push(SortArrayByRarity(buf));
   }
+
+  if (mode == "BruteForce") {
+    var bbb = 1;
+    for (let i = 0; i < ImageArray.length; i++) {
+      if (CheckPermState(i)) bbb *= ImageArray[i].length;
+      else bbb *= ImageArray[i].length + 1;
+    }
+
+    for (let i = 0; i < bbb; i++) {
+      CountArray.push(i);
+    }
+
+    Shuffle(CountArray);
+  }
+
 }
 
 const draw = async (filename) => {
@@ -131,5 +163,65 @@ const MassDraw = async (Count) => {
   console.log("Генерация успешно завершена!");
 }
 
+const CheckPermState = (id) => {
+  for (let i = 0; i < PermFolderArray.length; i++) {
+    if (FolderArray[id] == PermFolderArray[i]) return true;
+  }
+  return false;
+}
+
+const CrateCode = async () => {
+  var StringArrayBegin = "async function BruteForce(ImageArray, OutputFileName, width, height, CountArray) {\n";
+  var StringArray = "";
+  var StringArrayEnd = "";
+
+  StringArrayBegin += "var IndexNumber = 0;\n";
+  StringArrayBegin += "var Metadate = [];\n";
+
+  StringArrayBegin += "const fs = require(\"fs\");\n";
+  StringArrayBegin += "const { createCanvas, loadImage } = require(\"canvas\");\n";
+  StringArrayBegin += "const canvas = createCanvas(width, height);\n";
+  StringArrayBegin += "const ctx = canvas.getContext(\"2d\");\n"
+
+  PermFolderArray
+
+  for (let i = 0; i < ImageArray.length; i++) {
+    if (CheckPermState(i)) StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length; l" + i + " ++) {\n");
+    else StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length + 1; l" + i + " ++) {\n");
+
+    StringArray += "if (ImageArray[" + i + "][l" + i + "] != undefined) {\n";
+    StringArray += "ctx.drawImage(await loadImage(ImageArray[" + i + "][l" + i + "].fullname), 0, 0, width, height);\n";
+    StringArray += "Metadate.push(ImageArray[" + i + "][l" + i + "].Name);\n";
+    StringArray += "Metadate.push(ImageArray[" + i + "][l" + i + "].Rarity);\n";
+    StringArray += "}\n";
+
+    StringArrayEnd += ("} //End for ImageArray[" + i + "]\n");
+  }
+
+  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \".png\", canvas.toBuffer(\"image/png\"));\n";
+  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \"_MetaDate.json\", JSON.stringify(Metadate));\n";
+  StringArray += "console.log(\"Изображение: \" + IndexNumber + \" созданно успешно\");";
+
+
+  StringArray += "IndexNumber++;";
+  StringArray += "Metadate = [];";
+  StringArray += "ctx.clearRect(0, 0, width, height);";
+
+  StringArrayEnd += "}\n";
+  StringArrayEnd += "module.exports.BruteForce = BruteForce;\n";
+
+
+  fs.writeFileSync("_BruteForceCode.js", "");
+  fs.appendFileSync("_BruteForceCode.js", (StringArrayBegin + StringArray + StringArrayEnd));
+
+}
+
 LoadImage();
-MassDraw(CountImage);
+
+if (mode == "CountMode") MassDraw(CountImage);
+else {
+  CrateCode();
+  var BFCode = require("./_BruteForceCode.js");
+  BFCode.BruteForce(ImageArray, OutputFileName, width, height, CountArray);
+
+}
