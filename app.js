@@ -15,7 +15,7 @@ const mode = "BruteForce"; // Тут устанавливается режим �
 // В режиме перебора вариантов происходит отрисовка всех возможных комбинаций, с учетом того, что какой-либо аксессуар может отсутствовать
 // Ниже, в PermFolderArray можно указать арты из каких папок не получают возможность не появиться при генерации 
 
-const CountImage = 10; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
+const CountImage = 3; // Тут указывается кол-во итоговых артов (сколько нужно сгенерировать)
 const OutputFileName = "image"; // Название файла изображения полученного на выходе. К нему автоматически добавляется порядковый номер
 
 var FolderArray = [ // Тут прописываются пути к папкам с разными аксессуарами. Прорисовка проходит сверху вниз. Картининки из первой строчки рисуются первыми
@@ -41,7 +41,7 @@ const { createCanvas, loadImage } = require("canvas");
 const { Console } = require("console");
 const canvas = createCanvas(width, height);
 const ctx = canvas.getContext("2d");
-var Metadate = [];
+var Metadate = "";
 var ImageArray = [];
 var CountArray = [];
 
@@ -57,15 +57,42 @@ const getElements = (path) => {
         return {
           Name: i.slice(0, -8),
           Rarity: i.slice(-7, -4),
+          Type: path.slice(2, -1),
           fileName: i,
           fullname: path + i
         };
       });
 };
 
-const AddToMetaDate = (image) => {
-  Metadate.push(image.Name);
-  Metadate.push(image.Rarity);
+function GetMetaDate(image) {
+  let buf = "";
+  buf += "{\n";
+  buf += "\"trait_type\": \"" + image.Type + "\", ";
+  buf += "\"value\": \"" + image.Name + "\"";
+  buf += "},\n"
+  return buf;
+}
+
+function GetMetaDateEND(image) {
+  let buf = "";
+  buf += "{\n";
+  buf += "\"trait_type\": \"" + image.Type + "\", ";
+  buf += "\"value\": \"" + image.Name + "\"";
+  buf += "}\n"
+  return buf;
+}
+
+function CreateMetaDate() {
+  let buf = "";
+  buf += "{\n";
+  buf+= "\"attributes\": [\n";
+  return buf;
+}
+
+function EndMetaDate() {
+  let buf = "";
+  buf+= "]\n}";
+  return buf;
 }
 
 const GetItem = (Array) => {
@@ -110,7 +137,7 @@ function Shuffle(array) {
 
 const SaveIMG = (bufcanvs, filename) => {
     fs.writeFileSync("./Result/" + filename + ".png", bufcanvs.toBuffer("image/png"));
-    fs.writeFileSync("./Result/" + filename + "_MetaDate.json", JSON.stringify(Metadate));
+    fs.writeFileSync("./Result/" + filename + "_MetaDate.json", Metadate);
 }
 
 const LoadImage = () => {
@@ -138,19 +165,24 @@ const LoadImage = () => {
 
 const draw = async (filename) => {
 
+  Metadate += CreateMetaDate();
+
   for (let i = 0; i < FolderArray.length; i++)
   {
     var bufIMG = GetItem(ImageArray[i]);
     if (bufIMG != undefined) {
       ctx.drawImage(await loadImage(bufIMG.fullname), 0, 0, width, height);
-      AddToMetaDate(await bufIMG);
+      if (FolderArray.length - i == 1) Metadate += GetMetaDateEND(await bufIMG);
+      else Metadate += GetMetaDate(await bufIMG);
     }
   }
-  
+
+  Metadate+= EndMetaDate();
+
   SaveIMG(canvas, filename);
 
   console.log("Изображение: " + filename + " успешно созданно!");
-  Metadate = [];
+  Metadate = "";
   ctx.clearRect(0, 0, width, height);
 }
 
@@ -175,13 +207,17 @@ const CrateCode = async () => {
   var StringArray = "";
   var StringArrayEnd = "";
 
+  StringArrayBegin += "var AppCode = require(\"./app.js\");\n";
+
   StringArrayBegin += "var IndexNumber = 0;\n";
-  StringArrayBegin += "var Metadate = [];\n";
+  StringArrayBegin += "var Metadate = \"\";\n";
 
   StringArrayBegin += "const fs = require(\"fs\");\n";
   StringArrayBegin += "const { createCanvas, loadImage } = require(\"canvas\");\n";
   StringArrayBegin += "const canvas = createCanvas(width, height);\n";
   StringArrayBegin += "const ctx = canvas.getContext(\"2d\");\n"
+
+  StringArray +=  "Metadate += AppCode.CreateMetaDate();\n";
 
   PermFolderArray
 
@@ -189,22 +225,27 @@ const CrateCode = async () => {
     if (CheckPermState(i)) StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length; l" + i + " ++) {\n");
     else StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length + 1; l" + i + " ++) {\n");
 
+    var S = "\"attributes\": [\n";
+
     StringArray += "if (ImageArray[" + i + "][l" + i + "] != undefined) {\n";
     StringArray += "ctx.drawImage(await loadImage(ImageArray[" + i + "][l" + i + "].fullname), 0, 0, width, height);\n";
-    StringArray += "Metadate.push(ImageArray[" + i + "][l" + i + "].Name);\n";
-    StringArray += "Metadate.push(ImageArray[" + i + "][l" + i + "].Rarity);\n";
+    if (ImageArray.length - i == 1) StringArray += "Metadate += AppCode.GetMetaDateEND(ImageArray[" + i + "][l" + i + "]);\n";
+    else StringArray += "Metadate += AppCode.GetMetaDate(ImageArray[" + i + "][l" + i + "]);\n";
+
     StringArray += "}\n";
 
     StringArrayEnd += ("} //End for ImageArray[" + i + "]\n");
   }
 
+  StringArray +=  "Metadate += AppCode.EndMetaDate();\n";
+
   StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \".png\", canvas.toBuffer(\"image/png\"));\n";
-  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \"_MetaDate.json\", JSON.stringify(Metadate));\n";
+  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \"_MetaDate.json\", Metadate);\n";
   StringArray += "console.log(\"Изображение: \" + IndexNumber + \" созданно успешно\");";
 
 
   StringArray += "IndexNumber++;";
-  StringArray += "Metadate = [];";
+  StringArray += "Metadate = \"\";";
   StringArray += "ctx.clearRect(0, 0, width, height);";
 
   StringArrayEnd += "}\n";
@@ -216,6 +257,11 @@ const CrateCode = async () => {
 
 }
 
+module.exports.CreateMetaDate = CreateMetaDate;
+module.exports.EndMetaDate = EndMetaDate;
+module.exports.GetMetaDate = GetMetaDate;
+module.exports.GetMetaDateEND = GetMetaDateEND;
+
 LoadImage();
 
 if (mode == "CountMode") MassDraw(CountImage);
@@ -223,5 +269,4 @@ else {
   CrateCode();
   var BFCode = require("./_BruteForceCode.js");
   BFCode.BruteForce(ImageArray, OutputFileName, width, height, CountArray);
-
 }
