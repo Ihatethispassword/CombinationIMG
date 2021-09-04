@@ -11,7 +11,10 @@ const width = 500; // Установка ширины картинок
 const height = 500; // Установка высоты картинок
 // Для коректного отображения, необходимо указать точный размер картинок в пикселях
 
-const mode = "BruteForce"; // Тут устанавливается режим генерации. "BruteForce" - перебор вариантов. "CountMode" - создание заданного колличества
+const Link = "https://www.dropbox.com/s/vnzq6jjmggppxsb/";
+
+
+const mode = "CountMode"; // Тут устанавливается режим генерации. "BruteForce" - перебор вариантов. "CountMode" - создание заданного колличества
 // В режиме перебора вариантов происходит отрисовка всех возможных комбинаций, с учетом того, что какой-либо аксессуар может отсутствовать
 // Ниже, в PermFolderArray можно указать арты из каких папок не получают возможность не появиться при генерации 
 
@@ -41,9 +44,11 @@ const { createCanvas, loadImage } = require("canvas");
 const { Console } = require("console");
 const canvas = createCanvas(width, height);
 const ctx = canvas.getContext("2d");
-var Metadate = "";
 var ImageArray = [];
 var CountArray = [];
+
+var MetadataArray = [];
+var AttributesArray = [];
 
 function getRandomInt(max) {
     return Math.floor(Math.random() * max);
@@ -64,35 +69,27 @@ const getElements = (path) => {
       });
 };
 
-function GetMetaDate(image) {
-  let buf = "";
-  buf += "{\n";
-  buf += "\"trait_type\": \"" + image.Type + "\", ";
-  buf += "\"value\": \"" + image.Name + "\"";
-  buf += "},\n"
-  return buf;
-}
+const AddMetadata = (Name, ListMetaDate = MetadataArray, ListAttributs = AttributesArray) => {
+  let buf = {
+    name: Name,
+    //description: "",
+    iamge: Link + Name + ".png",
+    attributes: ListAttributs,
+  };
+  ListMetaDate.push(buf);
+  AttributesArray = [];
+};
 
-function GetMetaDateEND(image) {
-  let buf = "";
-  buf += "{\n";
-  buf += "\"trait_type\": \"" + image.Type + "\", ";
-  buf += "\"value\": \"" + image.Name + "\"";
-  buf += "}\n"
-  return buf;
-}
+const AddAttributes = (image, ListAttributs = AttributesArray) => {
+  let buf = {
+    trait_type: image.Type,
+    value: image.Name,
+  };
+  ListAttributs.push(buf);
+};
 
-function CreateMetaDate() {
-  let buf = "";
-  buf += "{\n";
-  buf+= "\"attributes\": [\n";
-  return buf;
-}
-
-function EndMetaDate() {
-  let buf = "";
-  buf+= "]\n}";
-  return buf;
+const GetMetadate = () => {
+return MetadataArray;
 }
 
 const GetItem = (Array) => {
@@ -135,9 +132,10 @@ function Shuffle(array) {
   }
 }
 
+
 const SaveIMG = (bufcanvs, filename) => {
     fs.writeFileSync("./Result/" + filename + ".png", bufcanvs.toBuffer("image/png"));
-    fs.writeFileSync("./Result/" + filename + "_MetaDate.json", Metadate);
+    fs.writeFileSync("./Result/" + filename + "_MetaDate.json", JSON.stringify(MetadataArray[0]));
 }
 
 const LoadImage = () => {
@@ -165,24 +163,22 @@ const LoadImage = () => {
 
 const draw = async (filename) => {
 
-  Metadate += CreateMetaDate();
-
   for (let i = 0; i < FolderArray.length; i++)
   {
     var bufIMG = GetItem(ImageArray[i]);
     if (bufIMG != undefined) {
       ctx.drawImage(await loadImage(bufIMG.fullname), 0, 0, width, height);
-      if (FolderArray.length - i == 1) Metadate += GetMetaDateEND(await bufIMG);
-      else Metadate += GetMetaDate(await bufIMG);
+      AddAttributes(bufIMG);
     }
   }
 
-  Metadate+= EndMetaDate();
+  AddMetadata(filename);
 
   SaveIMG(canvas, filename);
 
+  MetadataArray = [];
+
   console.log("Изображение: " + filename + " успешно созданно!");
-  Metadate = "";
   ctx.clearRect(0, 0, width, height);
 }
 
@@ -190,7 +186,7 @@ const MassDraw = async (Count) => {
 
   for (let i = 0; i < Count; i++)
   {
-    await draw(OutputFileName + " " + i);
+    await draw(OutputFileName + i);
   }
   console.log("Генерация успешно завершена!");
 }
@@ -210,42 +206,37 @@ const CrateCode = async () => {
   StringArrayBegin += "var AppCode = require(\"./app.js\");\n";
 
   StringArrayBegin += "var IndexNumber = 0;\n";
-  StringArrayBegin += "var Metadate = \"\";\n";
+  StringArrayBegin += "var Metadate = [];\n";
+  StringArrayBegin += "var MetadataArray = [];\n";
+  StringArrayBegin += "var AttributesArray = [];\n";
 
   StringArrayBegin += "const fs = require(\"fs\");\n";
   StringArrayBegin += "const { createCanvas, loadImage } = require(\"canvas\");\n";
   StringArrayBegin += "const canvas = createCanvas(width, height);\n";
   StringArrayBegin += "const ctx = canvas.getContext(\"2d\");\n"
 
-  StringArray +=  "Metadate += AppCode.CreateMetaDate();\n";
-
-  PermFolderArray
-
-  for (let i = 0; i < ImageArray.length; i++) {
+    for (let i = 0; i < ImageArray.length; i++) {
     if (CheckPermState(i)) StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length; l" + i + " ++) {\n");
     else StringArrayBegin += ("for (var l" + i + " = 0; l" + i + "  < ImageArray[" + i + "].length + 1; l" + i + " ++) {\n");
 
-    var S = "\"attributes\": [\n";
-
     StringArray += "if (ImageArray[" + i + "][l" + i + "] != undefined) {\n";
     StringArray += "ctx.drawImage(await loadImage(ImageArray[" + i + "][l" + i + "].fullname), 0, 0, width, height);\n";
-    if (ImageArray.length - i == 1) StringArray += "Metadate += AppCode.GetMetaDateEND(ImageArray[" + i + "][l" + i + "]);\n";
-    else StringArray += "Metadate += AppCode.GetMetaDate(ImageArray[" + i + "][l" + i + "]);\n";
-
+    StringArray += "AppCode.AddAttributes(ImageArray[" + i + "][l" + i + "], AttributesArray);\n";
     StringArray += "}\n";
-
+    
     StringArrayEnd += ("} //End for ImageArray[" + i + "]\n");
   }
 
-  StringArray +=  "Metadate += AppCode.EndMetaDate();\n";
+  StringArray +=  "AppCode.AddMetadata(OutputFileName + CountArray[IndexNumber], MetadataArray, AttributesArray);\n";
+  StringArray +=  "AttributesArray = [];\n";
 
   StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \".png\", canvas.toBuffer(\"image/png\"));\n";
-  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \"_MetaDate.json\", Metadate);\n";
+  StringArray += "fs.writeFileSync(\"./Result/\" + OutputFileName + \" \"+ CountArray[IndexNumber] + \"_MetaDate.json\", JSON.stringify(MetadataArray[0]));\n";
   StringArray += "console.log(\"Изображение: \" + IndexNumber + \" созданно успешно\");";
 
 
   StringArray += "IndexNumber++;";
-  StringArray += "Metadate = \"\";";
+  StringArray += "MetadataArray = [];";
   StringArray += "ctx.clearRect(0, 0, width, height);";
 
   StringArrayEnd += "}\n";
@@ -257,10 +248,9 @@ const CrateCode = async () => {
 
 }
 
-module.exports.CreateMetaDate = CreateMetaDate;
-module.exports.EndMetaDate = EndMetaDate;
-module.exports.GetMetaDate = GetMetaDate;
-module.exports.GetMetaDateEND = GetMetaDateEND;
+module.exports.AddMetadata = AddMetadata;
+module.exports.AddAttributes = AddAttributes;
+module.exports.GetMetadate = GetMetadate;
 
 LoadImage();
 
